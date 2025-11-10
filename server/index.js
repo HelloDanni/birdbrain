@@ -63,7 +63,7 @@ app.get('/api/hotspots/random', async (req, res) => {
     }
 
     const randomHotspot = hotspots[Math.floor(Math.random() * hotspots.length)];
-    const activity = await getHotspotActivity(randomHotspot.locId);
+    const activity = await getHotspotActivity(randomHotspot.locId, { countSpecies: true });
 
     res.json({
       mode: 'random',
@@ -101,7 +101,10 @@ app.get('/api/hotspots/top', async (req, res) => {
       HOTSPOT_ACTIVITY_CONCURRENCY,
       async (hotspot) => ({
         ...normalizeHotspot(hotspot, origin),
-        activity: await getHotspotActivity(hotspot.locId),
+        activity: await getHotspotActivity(hotspot.locId, {
+          includeSpeciesList: true,
+          countSpecies: true,
+        }),
       }),
     );
 
@@ -175,7 +178,7 @@ if (fs.existsSync(clientDistDir)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Birding Suggester API listening on port ${PORT}`);
+  console.log(`Birdbrain API listening on port ${PORT}`);
 });
 
 async function resolveOrigin({ lat, lng, postalCode }) {
@@ -233,7 +236,7 @@ async function getHotspotsByGeo({ lat, lng, distanceKm, limit }) {
   return Array.isArray(hotspots) ? hotspots : [];
 }
 
-async function getHotspotActivity(locId) {
+async function getHotspotActivity(locId, options = {}) {
   const searchParams = new URLSearchParams({
     back: String(RECENT_WINDOW_DAYS),
     maxResults: String(HOTSPOT_ACTIVITY_MAX_RESULTS),
@@ -244,10 +247,10 @@ async function getHotspotActivity(locId) {
   try {
     const response = await fetchWithKey(url);
     const observations = (await response.json()) ?? [];
-    return summarizeObservationStats(observations);
+    return summarizeObservationStats(observations, options);
   } catch (error) {
     if (error.statusCode === 404 || error.statusCode === 410) {
-      return summarizeObservationStats([]);
+      return summarizeObservationStats([], options);
     }
     throw error;
   }
@@ -267,7 +270,11 @@ async function getNotableHotspotsWithinRadius(location, hotspotMap, origin) {
   const response = await fetchWithKey(url);
   const observations = (await response.json()) ?? [];
 
-  const grouped = groupObservationsByLocation(observations, { includeSpecies: true });
+  const grouped = groupObservationsByLocation(observations, {
+    includeSpeciesList: true,
+    countSpecies: true,
+    includeNotableSpecies: true,
+  });
   const results = [];
 
   grouped.forEach((accumulator, locId) => {
@@ -288,7 +295,7 @@ async function fetchWithKey(url) {
   const response = await fetch(url, {
     headers: {
       'X-eBirdApiToken': EBIRD_API_KEY,
-      'User-Agent': 'Birding-Suggester/1.0',
+      'User-Agent': 'Birdbrain/1.0',
       Accept: 'application/json',
     },
   });
@@ -322,33 +329,52 @@ function normalizeDistance(value) {
   return Math.min(Math.max(numeric, 1), 500);
 }
 
-function summarizeObservationStats(observations, { includeSpecies = false } = {}) {
-  const accumulator = createActivityAccumulator(includeSpecies);
+function summarizeObservationStats(
+  observations,
+  { includeSpeciesList = false, countSpecies = false, includeNotableSpecies = false } = {},
+) {
+  const accumulator = createActivityAccumulator({
+    includeSpeciesList,
+    countSpecies,
+    includeNotableSpecies,
+  });
   (observations ?? []).forEach((obs) => applyObservationToAccumulator(accumulator, obs));
   return finalizeActivityAccumulator(accumulator);
 }
 
-function groupObservationsByLocation(observations, { includeSpecies = false } = {}) {
+function groupObservationsByLocation(
+  observations,
+  { includeSpeciesList = false, countSpecies = false, includeNotableSpecies = false } = {},
+) {
   const map = new Map();
   (observations ?? []).forEach((obs) => {
     if (!obs.locId) {
       return;
     }
     if (!map.has(obs.locId)) {
-      map.set(obs.locId, createActivityAccumulator(includeSpecies));
+      map.set(
+        obs.locId,
+        createActivityAccumulator({ includeSpeciesList, countSpecies, includeNotableSpecies }),
+      );
     }
     applyObservationToAccumulator(map.get(obs.locId), obs);
   });
   return map;
 }
 
-function createActivityAccumulator(includeSpecies = false) {
+function createActivityAccumulator({
+  includeSpeciesList = false,
+  countSpecies = false,
+  includeNotableSpecies = false,
+} = {}) {
   return {
     checklistIds: new Set(),
     observationCount: 0,
     lastObservationTimestamp: null,
-    includeSpecies,
-    speciesMap: includeSpecies ? new Map() : null,
+    includeSpeciesList,
+    countSpecies,
+    includeNotableSpecies,
+    speciesMap: includeSpeciesList || countSpecies ? new Map() : null,
   };
 }
 
@@ -373,7 +399,7 @@ function applyObservationToAccumulator(accumulator, observation) {
     }
   }
 
-  if (accumulator.includeSpecies && accumulator.speciesMap && observation.speciesCode) {
+  if ((accumulator.includeSpeciesList || accumulator.countSpecies) && accumulator.speciesMap && observation.speciesCode) {
     if (!accumulator.speciesMap.has(observation.speciesCode)) {
       accumulator.speciesMap.set(observation.speciesCode, {
         speciesCode: observation.speciesCode,
@@ -386,7 +412,7 @@ function applyObservationToAccumulator(accumulator, observation) {
 
 function finalizeActivityAccumulator(accumulator) {
   const checklistCount = accumulator.checklistIds.size;
-  const observationCount = accumulator.observationCount;
+  const observationCount = accumulator.speciesMap ? accumulator.speciesMap.size : accumulator.observationCount;
   const result = {
     checklistCount,
     observationCount,
@@ -396,12 +422,16 @@ function finalizeActivityAccumulator(accumulator) {
     score: checklistCount * 2 + observationCount,
   };
 
-  if (accumulator.includeSpecies && accumulator.speciesMap && accumulator.speciesMap.size > 0) {
-    result.notableSpecies = Array.from(accumulator.speciesMap.values()).sort((a, b) => {
+  if (accumulator.speciesMap && accumulator.speciesMap.size > 0) {
+    const speciesList = Array.from(accumulator.speciesMap.values()).sort((a, b) => {
       const nameA = a.commonName ?? a.scientificName ?? '';
       const nameB = b.commonName ?? b.scientificName ?? '';
       return nameA.localeCompare(nameB);
     });
+    result.speciesList = speciesList;
+    if (accumulator.includeNotableSpecies) {
+      result.notableSpecies = speciesList;
+    }
   }
 
   return result;

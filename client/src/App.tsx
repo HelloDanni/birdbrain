@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import logo from './assets/transparent-logo.png';
 import './App.css';
 
 type Coordinates = {
@@ -12,6 +13,7 @@ type HotspotActivity = {
   lastObservationDate: string | null;
   score: number;
   notableSpecies?: NotableSpecies[];
+  speciesList?: NotableSpecies[];
 };
 
 type Hotspot = {
@@ -50,7 +52,7 @@ export function App() {
   const [randomHotspot, setRandomHotspot] = useState<Hotspot | null>(null);
   const [rankedHotspots, setRankedHotspots] = useState<Hotspot[]>([]);
   const [hasFetched, setHasFetched] = useState(false);
-  const [expandedNotableId, setExpandedNotableId] = useState<string | null>(null);
+  const [expandedSpeciesId, setExpandedSpeciesId] = useState<string | null>(null);
 
   const locationLabel = useMemo(() => {
     if (coords) {
@@ -82,8 +84,8 @@ export function App() {
     setStatus(null);
     setRandomHotspot(null);
     setRankedHotspots([]);
-    setHasFetched(false);
-    setExpandedNotableId(null);
+        setHasFetched(false);
+        setExpandedSpeciesId(null);
 
     if (!coords && postalCode.trim().length !== 5) {
       setError('Enter a valid 5-digit ZIP code or allow location access.');
@@ -118,9 +120,14 @@ export function App() {
     await fetchHotspots();
   };
 
-  const toggleNotableList = (locId: string) => {
-    setExpandedNotableId((prev) => (prev === locId ? null : locId));
+  const toggleSpeciesList = (locId: string) => {
+    setExpandedSpeciesId((prev) => (prev === locId ? null : locId));
   };
+
+  const getScoreDescription = (context: 'random' | 'top' | 'notable') =>
+    context === 'notable'
+      ? 'Score = (checklists × 2) + unique notable species observed over the last 7 days.'
+      : 'Score = (checklists × 2) + unique species observed over the last 7 days.';
 
   const requestCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -160,17 +167,20 @@ export function App() {
     setStatus(null);
     setError(null);
     setHasFetched(false);
-    setExpandedNotableId(null);
+    setExpandedSpeciesId(null);
   }, [mode]);
 
   return (
     <div className="app">
-      <section className="card">
-        <h1>Birding Suggester</h1>
-        <p className="muted">
-          Discover high-potential eBird hotspots near you. Choose a spontaneous adventure or let the data surface the
-          five most active locations from the past week.
-        </p>
+      <section className="card hero">
+        <img src={logo} alt="Birdbrain logo" className="hero-logo" />
+        <div className="hero-copy">
+          <h1>Discover Your Next Birding Adventure</h1>
+          <p>
+            Can’t decide where to go birding today? BirdBrain takes the guesswork out of it. Instantly find the most
+            active nearby hotspots—or let the app surprise you with a random pick. Smarter birding starts with one tap.
+          </p>
+        </div>
       </section>
 
       <section className="card">
@@ -263,12 +273,19 @@ export function App() {
                 <strong>{randomHotspot.activity.checklistCount}</strong>
               </div>
               <div className="stat-pill">
-                Observations (7d)
+                Species (7d)
                 <strong>{randomHotspot.activity.observationCount}</strong>
               </div>
               <div className="stat-pill">
                 Activity score
-                <strong>{randomHotspot.activity.score}</strong>
+                <button
+                  type="button"
+                  className="stat-tooltip-button"
+                  data-tooltip={getScoreDescription('random')}
+                  aria-label={getScoreDescription('random')}
+                >
+                  {randomHotspot.activity.score}
+                </button>
               </div>
             </div>
           </div>
@@ -293,51 +310,62 @@ export function App() {
             </p>
           ) : (
             <div className="results-grid">
-              {rankedHotspots.map((spot) => (
-                <article key={spot.locId} className="result-card">
-                  <h3>{spot.name}</h3>
-                  <p className="muted">
-                    {spot.regionCode}, {spot.countryCode}
-                  </p>
-                  <p className="muted">Distance: {spot.distanceKm !== null ? `${spot.distanceKm} km` : 'unknown'}</p>
-                  <a href={spot.url} target="_blank" rel="noreferrer">
-                    Explore on eBird (opens new tab)
-                  </a>
-                  <div className="stats">
-                    <div className="stat-pill">
-                      Checklists
-                      <strong>{spot.activity.checklistCount}</strong>
-                    </div>
-                    <div className="stat-pill">
-                      {mode === 'top' ? 'Observations' : 'Notable observations'}
-                      {mode === 'notable' &&
-                      spot.activity.notableSpecies &&
-                      spot.activity.notableSpecies.length > 0 ? (
+              {rankedHotspots.map((spot) => {
+                const speciesList =
+                  mode === 'notable' ? spot.activity.notableSpecies : spot.activity.speciesList;
+                const speciesLabel = mode === 'top' ? 'Species' : 'Notable species';
+                const speciesHeading =
+                  mode === 'top'
+                    ? 'Unique species observed in the past 7 days:'
+                    : 'Species flagged as notable in the past 7 days:';
+                const hasSpeciesList = speciesList && speciesList.length > 0;
+                return (
+                  <article key={spot.locId} className="result-card">
+                    <h3>{spot.name}</h3>
+                    <p className="muted">
+                      {spot.regionCode}, {spot.countryCode}
+                    </p>
+                    <p className="muted">Distance: {spot.distanceKm !== null ? `${spot.distanceKm} km` : 'unknown'}</p>
+                    <a href={spot.url} target="_blank" rel="noreferrer">
+                      Explore on eBird (opens new tab)
+                    </a>
+                    <div className="stats">
+                      <div className="stat-pill">
+                        Checklists
+                        <strong>{spot.activity.checklistCount}</strong>
+                      </div>
+                      <div className="stat-pill">
+                        {speciesLabel}
+                        {hasSpeciesList ? (
+                          <button
+                            type="button"
+                            className="stat-link-button"
+                            onClick={() => toggleSpeciesList(spot.locId)}
+                            aria-expanded={expandedSpeciesId === spot.locId}
+                          >
+                            {spot.activity.observationCount}
+                          </button>
+                        ) : (
+                          <strong>{spot.activity.observationCount}</strong>
+                        )}
+                      </div>
+                      <div className="stat-pill">
+                        Score
                         <button
                           type="button"
-                          className="stat-link-button"
-                          onClick={() => toggleNotableList(spot.locId)}
-                          aria-expanded={expandedNotableId === spot.locId}
+                          className="stat-tooltip-button"
+                          data-tooltip={getScoreDescription(mode)}
+                          aria-label={getScoreDescription(mode)}
                         >
-                          {spot.activity.observationCount}
+                          {spot.activity.score}
                         </button>
-                      ) : (
-                        <strong>{spot.activity.observationCount}</strong>
-                      )}
+                      </div>
                     </div>
-                    <div className="stat-pill">
-                      Score
-                      <strong>{spot.activity.score}</strong>
-                    </div>
-                  </div>
-                  {mode === 'notable' &&
-                    spot.activity.notableSpecies &&
-                    spot.activity.notableSpecies.length > 0 &&
-                    expandedNotableId === spot.locId && (
+                    {hasSpeciesList && expandedSpeciesId === spot.locId && (
                       <div className="notable-panel">
-                        <p className="muted">Species flagged as notable in the past 7 days:</p>
+                        <p className="muted">{speciesHeading}</p>
                         <ul>
-                          {spot.activity.notableSpecies.map((species, index) => (
+                        {speciesList.map((species: NotableSpecies, index: number) => (
                             <li
                               key={
                                 species.speciesCode ??
@@ -355,8 +383,9 @@ export function App() {
                         </ul>
                       </div>
                     )}
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>

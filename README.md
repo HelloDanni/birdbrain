@@ -1,6 +1,6 @@
-# Birding Suggester
+# Birdbrain
 
-Discover eBird hotspots tailored to your location. The app talks to the official eBird API, keeps your API token on the server, and lets you either roll the dice on a random hotspot or review the top 5 most active locations (based on checklist and observation volume during the past 7 days).
+Birdbrain helps you uncover eBird hotspots tailored to your mood—roll with a surprise pick, spotlight the most active haunts, or chase recent notable sightings—all without ever exposing your API key.
 
 ## Prerequisites
 
