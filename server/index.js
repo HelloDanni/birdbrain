@@ -63,7 +63,10 @@ app.get('/api/hotspots/random', async (req, res) => {
     }
 
     const randomHotspot = hotspots[Math.floor(Math.random() * hotspots.length)];
-    const activity = await getHotspotActivity(randomHotspot.locId, { countSpecies: true });
+    const activity = await getHotspotActivity(randomHotspot.locId, {
+      includeSpeciesList: true,
+      countSpecies: true,
+    });
 
     res.json({
       mode: 'random',

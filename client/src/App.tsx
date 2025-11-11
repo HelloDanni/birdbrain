@@ -53,6 +53,7 @@ export function App() {
   const [rankedHotspots, setRankedHotspots] = useState<Hotspot[]>([]);
   const [hasFetched, setHasFetched] = useState(false);
   const [expandedSpeciesId, setExpandedSpeciesId] = useState<string | null>(null);
+  const [showRandomSpecies, setShowRandomSpecies] = useState(false);
 
   const locationLabel = useMemo(() => {
     if (coords) {
@@ -84,8 +85,9 @@ export function App() {
     setStatus(null);
     setRandomHotspot(null);
     setRankedHotspots([]);
-        setHasFetched(false);
-        setExpandedSpeciesId(null);
+    setHasFetched(false);
+    setExpandedSpeciesId(null);
+    setShowRandomSpecies(false);
 
     if (!coords && postalCode.trim().length !== 5) {
       setError('Enter a valid 5-digit ZIP code or allow location access.');
@@ -122,6 +124,10 @@ export function App() {
 
   const toggleSpeciesList = (locId: string) => {
     setExpandedSpeciesId((prev) => (prev === locId ? null : locId));
+  };
+
+  const toggleRandomSpecies = () => {
+    setShowRandomSpecies((prev) => !prev);
   };
 
   const getScoreDescription = (context: 'random' | 'top' | 'notable') =>
@@ -168,6 +174,7 @@ export function App() {
     setError(null);
     setHasFetched(false);
     setExpandedSpeciesId(null);
+    setShowRandomSpecies(false);
   }, [mode]);
 
   return (
@@ -274,7 +281,18 @@ export function App() {
               </div>
               <div className="stat-pill">
                 Species (7d)
-                <strong>{randomHotspot.activity.observationCount}</strong>
+                {randomHotspot.activity.speciesList && randomHotspot.activity.speciesList.length > 0 ? (
+                  <button
+                    type="button"
+                    className="stat-link-button"
+                    onClick={toggleRandomSpecies}
+                    aria-expanded={showRandomSpecies}
+                  >
+                    {randomHotspot.activity.observationCount}
+                  </button>
+                ) : (
+                  <strong>{randomHotspot.activity.observationCount}</strong>
+                )}
               </div>
               <div className="stat-pill">
                 Activity score
@@ -288,6 +306,25 @@ export function App() {
                 </button>
               </div>
             </div>
+            {showRandomSpecies && randomHotspot.activity.speciesList && (
+              <div className="notable-panel">
+                <p className="muted">Unique species observed in the past 7 days:</p>
+                <ul>
+                  {randomHotspot.activity.speciesList.map((species, index) => (
+                    <li
+                      key={
+                        species.speciesCode ?? species.commonName ?? species.scientificName ?? `${randomHotspot.locId}-${index}`
+                      }
+                    >
+                      <strong>{species.commonName ?? species.scientificName ?? 'Unknown species'}</strong>
+                      {species.scientificName && species.scientificName !== species.commonName ? (
+                        <span className="muted"> ({species.scientificName})</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </section>
       )}
