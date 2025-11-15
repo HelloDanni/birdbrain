@@ -21,6 +21,7 @@ Then edit `.env` and set:
 EBIRD_API_KEY=your_real_token
 PORT=4000            # optional; defaults to 4000
 CLIENT_ORIGIN=http://localhost:5173  # optional; lock CORS for production
+VITE_API_BASE_URL=https://your-production-api.example/api  # optional; required for static hosting such as GitHub Pages
 ```
 
 > [!] Never commit the `.env` file - `.gitignore` already excludes it.
@@ -51,6 +52,17 @@ npm run build
 
 - Builds the React client into `client/dist`
 - You can then start the API with `npm start`, which also serves the compiled front-end.
+
+## Deploying to GitHub Pages
+
+> GitHub Pages only hosts the static client. You still need to deploy the Express API (Render, Fly, Railway, etc.) and set `CLIENT_ORIGIN` to the Pages URL so CORS remains locked down.
+
+1. Deploy the Express API somewhere HTTPS-accessible and note its `/api` URL.
+2. In your repository settings, open **Secrets and variables → Actions** and add a secret named `VITE_API_BASE_URL` that points to the deployed API (for example `https://birdbrain-api.onrender.com/api`). The GitHub Actions workflow injects this value at build time so the client talks to the remote API.
+3. In **Settings → Pages**, choose **GitHub Actions** as the source.
+4. Push to `main` (or trigger the workflow manually). `.github/workflows/deploy.yml` installs dependencies, runs `npm run build:client` with GitHub Pages-aware asset paths, and publishes `client/dist` via `actions/deploy-pages`.
+
+After the first successful run, Pages will be available at `https://<username>.github.io/Birdbrain/`. Update the `CLIENT_ORIGIN` environment variable on your API host to this URL so browser requests are allowed in production.
 
 ## API summary
 
