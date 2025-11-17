@@ -37,7 +37,7 @@ jobs:
       - name: Build client
         env:
           GITHUB_PAGES: 'true'
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }} # https://birdbrain.onrender.com/api
+          VITE_API_BASE_URL: https://birdbrain.onrender.com/api # https://birdbrain.onrender.com/api
         run: npm run build:client
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
