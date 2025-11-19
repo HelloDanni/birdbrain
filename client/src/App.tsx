@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import logo from './assets/transparent-logo.png';
 import './App.css';
 
+//test
+
 type Coordinates = {
   lat: number;
   lng: number;
