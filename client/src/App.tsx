@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import logo from './assets/transparent-logo.png';
 import './App.css';
 
@@ -40,6 +40,16 @@ const DISTANCE_OPTIONS = [5, 10, 15, 20, 30].map((miles) => ({
   valueKm: Math.round(miles * 1.60934 * 10) / 10,
 }));
 
+const KM_TO_MILES = 0.621371;
+
+const formatDistanceMiles = (distanceKm: number | null) => {
+  if (distanceKm === null) {
+    return 'unknown';
+  }
+  const miles = Math.round(distanceKm * KM_TO_MILES * 10) / 10;
+  return `${miles} miles`;
+};
+
 export function App() {
   const [mode, setMode] = useState<'random' | 'top' | 'notable'>('random');
   const [distanceKm, setDistanceKm] = useState(DISTANCE_OPTIONS[1].valueKm);
@@ -54,6 +64,9 @@ export function App() {
   const [hasFetched, setHasFetched] = useState(false);
   const [expandedSpeciesId, setExpandedSpeciesId] = useState<string | null>(null);
   const [showRandomSpecies, setShowRandomSpecies] = useState(false);
+
+  const randomResultRef = useRef<HTMLElement | null>(null);
+  const listResultsRef = useRef<HTMLElement | null>(null);
 
   const locationLabel = useMemo(() => {
     if (coords) {
@@ -177,6 +190,20 @@ export function App() {
     setShowRandomSpecies(false);
   }, [mode]);
 
+  useEffect(() => {
+    if (!loading && mode === 'random' && randomHotspot && randomResultRef.current) {
+      randomResultRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      randomResultRef.current.focus({ preventScroll: true });
+    }
+  }, [loading, mode, randomHotspot]);
+
+  useEffect(() => {
+    if (!loading && mode !== 'random' && rankedHotspots.length > 0 && listResultsRef.current) {
+      listResultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      listResultsRef.current.focus({ preventScroll: true });
+    }
+  }, [loading, mode, rankedHotspots]);
+
   return (
     <div className="app">
       <section className="card hero">
@@ -258,7 +285,7 @@ export function App() {
       </section>
 
       {!loading && mode === 'random' && randomHotspot && (
-        <section className="card">
+        <section className="card" ref={randomResultRef} tabIndex={-1}>
           <h2>Today's pick</h2>
           <div className="result-card">
             <h3>{randomHotspot.name}</h3>
@@ -268,9 +295,7 @@ export function App() {
             <a href={randomHotspot.url} target="_blank" rel="noreferrer">
               View on eBird (opens new tab)
             </a>
-            <p className="muted">
-              Distance: {randomHotspot.distanceKm !== null ? `${randomHotspot.distanceKm} km` : 'unknown'}
-            </p>
+            <p className="muted">Distance: {formatDistanceMiles(randomHotspot.distanceKm)}</p>
             <p className="muted">
               Coordinates: {randomHotspot.latitude.toFixed(3)}, {randomHotspot.longitude.toFixed(3)}
             </p>
@@ -330,7 +355,7 @@ export function App() {
       )}
 
       {!loading && mode !== 'random' && (
-        <section className="card">
+        <section className="card" ref={listResultsRef} tabIndex={-1}>
           <h2>{mode === 'top' ? 'Top 5 active hotspots' : 'Top 5 notable hotspots'}</h2>
           <p className="muted">
             {mode === 'top'
@@ -362,7 +387,7 @@ export function App() {
                     <p className="muted">
                       {spot.regionCode}, {spot.countryCode}
                     </p>
-                    <p className="muted">Distance: {spot.distanceKm !== null ? `${spot.distanceKm} km` : 'unknown'}</p>
+                    <p className="muted">Distance: {formatDistanceMiles(spot.distanceKm)}</p>
                     <a href={spot.url} target="_blank" rel="noreferrer">
                       Explore on eBird (opens new tab)
                     </a>
